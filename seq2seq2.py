@@ -529,8 +529,7 @@ Beem search and Greedy
 """
 def beam_search(model, src, max_len, trg_vocab):
      sentences = []
-     k = 3 #set k for beam search
-     a = 0.6 #a is used for length normalization
+     a = 0.6 #a is the 
      topvalue = 1
      model.eval()
 
@@ -539,7 +538,8 @@ def beam_search(model, src, max_len, trg_vocab):
      eos_label = trg_vocab.stoi['<eos>']
      sos = torch.ones(1, 1).fill_(sos_label).type_as(src[0]) #1xB
      eos = torch.ones(1, 1).fill_(eos_label).type_as(src[0]) #1xB
-     for i in range(BATCH_SIZE): #this beam search can't work on small batch, so divide small batch here
+     for i in range(BATCH_SIZE):
+         k = 3 #set k for beam search
          # Encoder
          source = src[0].transpose(0,1)[i].view(-1,1)
          length = src[1][i].view(1)
@@ -547,10 +547,10 @@ def beam_search(model, src, max_len, trg_vocab):
 
          sequences = []
          result = []
-         for i in range(k):
+         for j in range(k):
              sequences.append([sos, torch.ones(1).type_as(src[0]).float()])
 
-         for i in range(max_len-1):
+         for di in range(max_len-1):
              if k != 0:
                  all_candidates = []
                  for row in range(k):
@@ -569,10 +569,10 @@ def beam_search(model, src, max_len, trg_vocab):
                          lp_y = ((5 + len(word)) ** a) / ((5 + 1) ** a)
                          score = (torch.mul(score, probability) ) / lp_y
                          all_candidates.append([word, score])
-                     if i == 0:
+                     if di == 0:
                          break
 
-                 # order all candidates by score up
+                 # order all candidates by score 从小到大排序
                  ordered = sorted(all_candidates, key=lambda tup:tup[topvalue].item())
 
                  # select k best
