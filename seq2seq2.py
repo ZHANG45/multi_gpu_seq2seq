@@ -538,7 +538,8 @@ def beam_search(model, src, max_len, trg_vocab):
      eos_label = trg_vocab.stoi['<eos>']
      sos = torch.ones(1, 1).fill_(sos_label).type_as(src[0]) #1xB
      eos = torch.ones(1, 1).fill_(eos_label).type_as(src[0]) #1xB
-     for i in range(BATCH_SIZE):
+
+     for i in range(src[0].size()[1]):
          k = 3 #set k for beam search
          # Encoder
          source = src[0].transpose(0,1)[i].view(-1,1)
