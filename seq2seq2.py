@@ -243,8 +243,8 @@ class Encoder(nn.Module):
         self.hidden_size = hidden_size
         self.n_layers = 2
         self.embed = nn.Embedding(vocab_size, embed_size, padding_idx=1)
-        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers=self.n_layers,
-                            dropout=dropout_p, bidirectional=True)
+        self.gru = nn.GRU(embed_size, hidden_size, num_layers=self.n_layers, 
+                                     dropout=dropout_p, bidirectional=True)
         self.dropout = nn.Dropout(p=dropout_p)
 
     def forward(self, src):
@@ -263,33 +263,31 @@ class Encoder(nn.Module):
         ex = self.embed(words) #LxB -> LxBxH
         ex = self.dropout(ex)
 
-        # 入力をLSTMで処理するためにPackする
+        # 入力をGRUで処理するためにPackする
         packed_input = nn.utils.rnn.pack_padded_sequence(ex, lengths)
 
-        # LSTM (L 回処理される)
-        packed_output, (ht, ct) = self.lstm(packed_input)
+        # GRU (L 回処理される)
+        packed_output, hidden = self.gru(packed_input)
 
-        # LSTMの出力をUnPackしてPaddingする
+        # GRUの出力をUnPackしてPaddingする
         output = nn.utils.rnn.pad_packed_sequence(packed_output, total_length=total_length)
 
         # ソートを元の順へ戻す
         output = output[0][:, parm_idx_rev]  #LxBx2H
-
+        hidden = hidden[:,parm_idx_rev]
+	
         # 前向きと後ろ向きの平均を計算
-        L, B, _ = output.size()
-        output = output.view(L, B, 2, -1).sum(dim=2)
-        #n_layers*2xLxBxH -> n_layersxLxH
-        ht = torch.mean(ht.view(self.n_layers, 2, -1, self.hidden_size), 1)
-        ct = torch.mean(ct.view(self.n_layers, 2, -1, self.hidden_size), 1)
-
-        return output, (ht, ct)
+        output = output[:, :, :self.hidden_size] + output[:, :, self.hidden_size:]
+	
+        return output, hidden
 
 class Decoder(nn.Module):
     def __init__(self, vocab_size, embed_size, hidden_size, dropout_p):
         super(Decoder, self).__init__()
         self.embed = nn.Embedding(vocab_size, embed_size, padding_idx=1)
-        self.lstm = nn.LSTM(2*embed_size, hidden_size,
-                            num_layers=2, dropout=dropout_p)
+        self.n_layers = 2
+        self.gru = nn.GRU(embed_size, hidden_size,
+                          num_layers=self.n_layers, dropout=dropout_p)
         self.Wc = nn.Linear(2*hidden_size, hidden_size)
         self.attention = Attention()
         self.dropout = nn.Dropout(p=dropout_p)
@@ -299,25 +297,22 @@ class Decoder(nn.Module):
         #encoder_states # LxBxH
         #last_states[0], [1] #n_layersxBxH
 
-        context = None
         output = []
         for word in words: #一単語ずつ処理する
             out, context, last_state = self.forward_step(
-                word, context, encoder_states, last_states, src_mask)
+                word, encoder_states, last_states, src_mask)
             output.append(out)
 
         return output
 
-    def forward_step(self, word, context, encoder_states, states, src_mask):
+    def forward_step(self, word, encoder_states, states, src_mask):
         # Embedding
         ex = self.embed(word) #BxH
         ex = self.dropout(ex)
 
         # input-feed
-        if context is None:
-            context = torch.zeros_like(ex)
-        rnn_input = torch.cat((ex, context), 1) #Bx2H
-        # LSTMの入力に文長の次元がいるため拡張
+        rnn_input = ex #Bx2H
+        # GRUの入力に文長の次元がいるため拡張
         rnn_input = torch.unsqueeze(rnn_input, 0) #1xBx2H
         # LSTM(1単語ずつ)
         rnn_output, status = self.lstm(rnn_input, states)
@@ -329,6 +324,7 @@ class Decoder(nn.Module):
         # 次元を元に戻す(2H->H)
         t = self.dropout(t)
         out = self.Wc(t) #BxH
+	out = torch.tanh(self.Wc(t)) #Bx1xH
         return out, context, status
 
 class Generator(nn.Module):
