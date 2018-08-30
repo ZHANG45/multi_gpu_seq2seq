@@ -294,6 +294,8 @@ class Decoder(nn.Module):
 
     def forward(self, trg, encoder_states, last_states, src_mask):
         words   = trg[0][:-1] #LxB (Lは<eos>を抜いた長さ)
+	last_states = last_states[:self.n_layers]
+
         #encoder_states # LxBxH
         #last_states[0], [1] #n_layersxBxH
 
@@ -324,7 +326,7 @@ class Decoder(nn.Module):
         # 次元を元に戻す(2H->H)
         t = self.dropout(t)
         out = self.Wc(t) #BxH
-	out = torch.tanh(self.Wc(t)) #Bx1xH
+        out = torch.tanh(self.Wc(t)) #Bx1xH
         return out, context, status
 
 class Generator(nn.Module):
