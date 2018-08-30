@@ -294,7 +294,7 @@ class Decoder(nn.Module):
 
     def forward(self, trg, encoder_states, last_states, src_mask):
         words   = trg[0][:-1] #LxB (Lは<eos>を抜いた長さ)
-	last_states = last_states[:self.n_layers]
+        last_states = last_states[:self.n_layers]
 
         #encoder_states # LxBxH
         #last_states[0], [1] #n_layersxBxH
